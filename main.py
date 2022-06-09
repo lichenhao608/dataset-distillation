@@ -23,7 +23,9 @@ from utils.io import load_results, save_test_results
 def train(state, model, epoch, optimizer):
     model.train()
     for it, (data, target) in enumerate(state.train_loader):
-        data, target = data.to(state.device, non_blocking=True), target.to(state.device, non_blocking=True)
+        data, target = data.to(state.device,
+                               non_blocking=True), target.to(state.device,
+                                                             non_blocking=True)
         optimizer.zero_grad()
         output = model(data)
         loss = F.cross_entropy(output, target)
@@ -32,9 +34,11 @@ def train(state, model, epoch, optimizer):
         if state.log_interval > 0 and it % state.log_interval == 0:
             log_str = 'Epoch: {:4d} ({:2.0f}%)\tTrain Loss: {: >7.4f}'.format(
                 epoch, 100. * it / len(state.train_loader), loss.item())
-            if it == 0 or (state.log_interval > 0 and it % state.log_interval == 0):
+            if it == 0 or (state.log_interval > 0 and
+                           it % state.log_interval == 0):
                 acc, loss = evaluate_models(state, [model])
-                log_str += '\tTest Acc: {: >5.2f}%\tTest Loss: {: >7.4f}'.format(acc.item() * 100, loss.item())
+                log_str += '\tTest Acc: {: >5.2f}%\tTest Loss: {: >7.4f}'.format(
+                    acc.item() * 100, loss.item())
                 model.train()
             logging.info(log_str)
 
@@ -64,11 +68,17 @@ def main(state):
                 logging.info('Train network {:04d}'.format(n))
                 if state.train_nets_type == 'loaded':
                     model_path = os.path.join(model_dir, 'net_{:04d}'.format(n))
-                    model.load_state_dict(torch.load(model_path, map_location=state.device))
+                    model.load_state_dict(
+                        torch.load(model_path, map_location=state.device))
                     logging.info('Loaded from {}'.format(model_path))
 
-                optimizer = optim.Adam(model.parameters(), lr=state.lr, betas=(0.5, 0.999))
-                scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=state.decay_epochs, gamma=state.decay_factor)
+                optimizer = optim.Adam(model.parameters(),
+                                       lr=state.lr,
+                                       betas=(0.5, 0.999))
+                scheduler = optim.lr_scheduler.StepLR(
+                    optimizer,
+                    step_size=state.decay_epochs,
+                    gamma=state.decay_factor)
                 for epoch in range(state.epochs):
                     scheduler.step()
                     train(state, model, epoch, optimizer)
@@ -78,7 +88,10 @@ def main(state):
                 torch.save(model.state_dict(), model_path)
             acc, loss = evaluate_models(state, models, test_all=True)
             desc = 'Test networks in [{} ... {})'.format(cur_idx, next_cur_idx)
-            logging.info('{}:\tTest Acc: {: >5.2f}%\tTest Loss: {: >7.4f}'.format(desc, acc.mean() * 100, loss.mean()))
+            logging.info(
+                '{}:\tTest Acc: {: >5.2f}%\tTest Loss: {: >7.4f}'.format(
+                    desc,
+                    acc.mean() * 100, loss.mean()))
             cur_idx = next_cur_idx
 
     elif state.mode in ['distill_basic', 'distill_attack', 'distill_adapt']:
@@ -91,17 +104,20 @@ def main(state):
                 return networks.get_networks(state, N=state.local_n_nets)
             elif state.train_nets_type == 'loaded':
                 models = networks.get_networks(state, N=state.local_n_nets)
-                with state.pretend(phase='train'):  # in case test_nets_type == same_as_train
+                with state.pretend(phase='train'
+                                  ):  # in case test_nets_type == same_as_train
                     model_dir = state.get_model_dir()
                 start_idx = state.world_rank * state.local_n_nets
                 for n, model in enumerate(models, start_idx):
                     model_path = os.path.join(model_dir, 'net_{:04d}'.format(n))
-                    model.load_state_dict(torch.load(model_path, map_location=state.device))
+                    model.load_state_dict(
+                        torch.load(model_path, map_location=state.device))
                 logging.info('Loaded checkpoints [{} ... {}) from {}'.format(
                     start_idx, start_idx + state.local_n_nets, model_dir))
                 return models
             else:
-                raise ValueError("train_nets_type: {}".format(state.train_nets_type))
+                raise ValueError("train_nets_type: {}".format(
+                    state.train_nets_type))
 
         # only construct when in training mode or test_nets_type == same_as_train
         if state.phase == 'train' or state.test_nets_type == 'same_as_train':
@@ -110,54 +126,65 @@ def main(state):
         # test models
         if state.test_nets_type == 'unknown_init':
             test_model, = networks.get_networks(state, N=1)
-            state.test_models = [test_model for _ in range(state.local_test_n_nets)]
+            state.test_models = [
+                test_model for _ in range(state.local_test_n_nets)
+            ]
         elif state.test_nets_type == 'same_as_train':
             assert state.test_n_nets == state.n_nets, \
                 "test_nets_type=same_as_train, expect test_n_nets=n_nets"
             state.test_models = state.models
         elif state.test_nets_type == 'loaded':
-            state.test_models = networks.get_networks(state, N=state.local_test_n_nets)
+            state.test_models = networks.get_networks(state,
+                                                      N=state.local_test_n_nets)
             with state.pretend(phase='test'):
-                model_dir = state.get_model_dir()   # get test models
+                model_dir = state.get_model_dir()  # get test models
             start_idx = state.world_rank * state.local_test_n_nets
             for n, test_model in enumerate(state.test_models, start_idx):
                 model_path = os.path.join(model_dir, 'net_{:04d}'.format(n))
-                test_model.load_state_dict(torch.load(model_path, map_location=state.device))
-            logging.info('Loaded held-out checkpoints [{} ... {}) from {}'.format(
-                start_idx, start_idx + state.local_test_n_nets, model_dir))
+                test_model.load_state_dict(
+                    torch.load(model_path, map_location=state.device))
+            logging.info(
+                'Loaded held-out checkpoints [{} ... {}) from {}'.format(
+                    start_idx, start_idx + state.local_test_n_nets, model_dir))
 
         if state.phase == 'train':
-            logging.info('Train {} steps iterated for {} epochs'.format(state.distill_steps, state.distill_epochs))
+            logging.info('Train {} steps iterated for {} epochs'.format(
+                state.distill_steps, state.distill_epochs))
             steps = train_distilled_image.distill(state, state.models)
-            evaluate_steps(state, steps,
-                           'distilled with {} steps and {} epochs'.format(state.distill_steps, state.distill_epochs),
+            evaluate_steps(state,
+                           steps,
+                           'distilled with {} steps and {} epochs'.format(
+                               state.distill_steps, state.distill_epochs),
                            test_all=True)
         elif state.phase == 'test':
             logging.info('')
-            logging.info((
-                'Test:\n'
-                '\ttest_distilled_images:\t{}\n'
-                '\ttest_distilled_lrs:\t{}\n'
-                '\ttest_distill_epochs:\t{}\n'
-                '\ttest_optmize_n_runs:\t{}\n'
-                '\ttest_optmize_n_nets:\t{}\n'
-                '\t{} time(s)'
-            ).format(
-                state.test_distilled_images,
-                ' '.join(state.test_distilled_lrs),
-                state.test_distill_epochs,
-                state.test_optimize_n_runs,
-                state.test_optimize_n_nets,
-                state.test_n_runs))
+            logging.info(
+                ('Test:\n'
+                 '\ttest_distilled_images:\t{}\n'
+                 '\ttest_distilled_lrs:\t{}\n'
+                 '\ttest_distill_epochs:\t{}\n'
+                 '\ttest_optmize_n_runs:\t{}\n'
+                 '\ttest_optmize_n_nets:\t{}\n'
+                 '\t{} time(s)').format(state.test_distilled_images,
+                                        ' '.join(state.test_distilled_lrs),
+                                        state.test_distill_epochs,
+                                        state.test_optimize_n_runs,
+                                        state.test_optimize_n_nets,
+                                        state.test_n_runs))
             logging.info('')
 
             loaded_steps = load_results(state, device=state.device)  # loaded
 
             if state.test_distilled_images == 'loaded':
-                unique_data_label = [s[:-1] for s in loaded_steps[:state.distill_steps]]
+                unique_data_label = [
+                    s[:-1] for s in loaded_steps[:state.distill_steps]
+                ]
 
                 def get_data_label(state):
-                    return [x for _ in range(state.distill_epochs) for x in unique_data_label]
+                    return [
+                        x for _ in range(state.distill_epochs)
+                        for x in unique_data_label
+                    ]
 
             elif state.test_distilled_images == 'random_train':
                 get_data_label = utils.baselines.random_train
@@ -173,7 +200,8 @@ def main(state):
             elif state.test_distilled_images == 'kmeans_train':
                 get_data_label = utils.baselines.kmeans_train
             else:
-                raise NotImplementedError('test_distilled_images: {}'.format(state.test_distilled_images))
+                raise NotImplementedError('test_distilled_images: {}'.format(
+                    state.test_distilled_images))
 
             # get lrs
             # allow for passing multiple options
@@ -188,6 +216,7 @@ def main(state):
                 p = float(state.test_distilled_lrs[2])
 
                 class TestRunner(object):
+
                     def __init__(self, state):
                         self.state = state
 
@@ -195,14 +224,16 @@ def main(state):
                         assert test_at_steps is None
 
                         logging.info(
-                            'Test #{} nearest neighbor classification with k={} and {}-norm'.format(test_idx, k, p))
+                            'Test #{} nearest neighbor classification with k={} and {}-norm'
+                            .format(test_idx, k, p))
 
                         state = self.state
 
                         with state.pretend(distill_epochs=1):
                             ref_data_label = tuple(get_data_label(state))
 
-                        ref_flat_data = torch.cat([d for d, _ in ref_data_label], 0).flatten(1)
+                        ref_flat_data = torch.cat(
+                            [d for d, _ in ref_data_label], 0).flatten(1)
                         ref_label = torch.cat([l for _, l in ref_data_label], 0)
 
                         assert k <= ref_label.size(0), (
@@ -214,26 +245,38 @@ def main(state):
                         for data, target in state.test_loader:
                             data = data.to(state.device, non_blocking=True)
                             target = target.to(state.device, non_blocking=True)
-                            dists = torch.norm(
-                                data.flatten(1)[:, None, ...] - ref_flat_data,
-                                dim=2, p=p
-                            )
+                            dists = torch.norm(data.flatten(1)[:, None, ...] -
+                                               ref_flat_data,
+                                               dim=2,
+                                               p=p)
                             if k == 1:
                                 argmin_dist = dists.argmin(dim=1)
                                 pred = ref_label[argmin_dist]
                                 del argmin_dist
                             else:
-                                _, argmink_dist = torch.topk(dists, k, dim=1, largest=False, sorted=False)
+                                _, argmink_dist = torch.topk(dists,
+                                                             k,
+                                                             dim=1,
+                                                             largest=False,
+                                                             sorted=False)
                                 labels = ref_label[argmink_dist]
-                                counts = [torch.bincount(l, minlength=state.num_classes) for l in labels]
+                                counts = [
+                                    torch.bincount(l,
+                                                   minlength=state.num_classes)
+                                    for l in labels
+                                ]
                                 counts = torch.stack(counts, 0)
                                 pred = counts.argmax(dim=1)
                                 del argmink_dist, labels, counts
                             corrects += (pred == target).sum().item()
                             total += data.size(0)
 
-                        at_steps = torch.ones(1, dtype=torch.long, device=state.device)
-                        acc = torch.as_tensor(corrects / total, device=state.device).view(1, 1)   # STEP x MODEL
+                        at_steps = torch.ones(1,
+                                              dtype=torch.long,
+                                              device=state.device)
+                        acc = torch.as_tensor(corrects / total,
+                                              device=state.device).view(
+                                                  1, 1)  # STEP x MODEL
                         loss = torch.full_like(acc, utils.nan)  # STEP x MODEL
                         return (at_steps, acc, loss)
 
@@ -252,27 +295,35 @@ def main(state):
 
                     def get_lrs(state):
                         n_steps = state.distill_steps * state.distill_epochs
-                        return torch.full((n_steps,), val, device=state.device).unbind()
+                        return torch.full((n_steps,), val,
+                                          device=state.device).unbind()
 
                 else:
-                    raise NotImplementedError('test_distilled_lrs first: {}'.format(lr_meth))
+                    raise NotImplementedError(
+                        'test_distilled_lrs first: {}'.format(lr_meth))
 
                 if state.test_optimize_n_runs is None:
+
                     class StepCollection(object):
+
                         def __init__(self, state):
                             self.state = state
 
                         def __getitem__(self, test_idx):
                             steps = []
-                            for (data, label), lr in zip(get_data_label(self.state), get_lrs(self.state)):
+                            for (data,
+                                 label), lr in zip(get_data_label(self.state),
+                                                   get_lrs(self.state)):
                                 steps.append((data, label, lr))
                             return steps
                 else:
                     assert state.test_optimize_n_runs >= state.test_n_runs
 
                     class StepCollection(object):
+
                         @functools.total_ordering
                         class Step(object):
+
                             def __init__(self, step, acc):
                                 self.step = step
                                 self.acc = acc
@@ -289,17 +340,32 @@ def main(state):
                             logging.info('Start optimizing evaluated steps...')
                             for run_idx in range(state.test_optimize_n_runs):
                                 if state.test_nets_type == 'unknown_init':
-                                    subtest_nets = [state.test_models[0] for _ in range(state.test_optimize_n_nets)]
+                                    subtest_nets = [
+                                        state.test_models[0] for _ in range(
+                                            state.test_optimize_n_nets)
+                                    ]
                                 else:
-                                    with state.pretend(local_n_nets=state.test_optimize_n_nets):
-                                        with utils.logging.disable(logging.INFO):
+                                    with state.pretend(local_n_nets=state.
+                                                       test_optimize_n_nets):
+                                        with utils.logging.disable(
+                                                logging.INFO):
                                             subtest_nets = load_train_models()
-                                with state.pretend(test_models=subtest_nets, test_loader=state.train_loader):
+                                with state.pretend(
+                                        test_models=subtest_nets,
+                                        test_loader=state.train_loader):
                                     steps = []
-                                    for (data, label), lr in zip(get_data_label(self.state), get_lrs(self.state)):
+                                    for (data, label), lr in zip(
+                                            get_data_label(self.state),
+                                            get_lrs(self.state)):
                                         steps.append((data, label, lr))
-                                    res = evaluate_steps(state, steps, '', '', test_all=False,
-                                                         test_at_steps=[len(steps)], log_results=False)
+                                    res = evaluate_steps(
+                                        state,
+                                        steps,
+                                        '',
+                                        '',
+                                        test_all=False,
+                                        test_at_steps=[len(steps)],
+                                        log_results=False)
                                     acc = self.acc(res)
                                     elem = StepCollection.Step(steps, acc)
                                     if len(self.good_steps) < state.test_n_runs:
@@ -308,8 +374,9 @@ def main(state):
                                         heapq.heappushpop(self.good_steps, elem)
                                     logging.info((
                                         '\tOptimize run {:> 3}:\tAcc on training set {: >5.2f}%'
-                                        '\tBoundary Acc {: >5.2f}%'
-                                    ).format(run_idx, acc * 100, self.good_steps[0].acc * 100))
+                                        '\tBoundary Acc {: >5.2f}%').format(
+                                            run_idx, acc * 100,
+                                            self.good_steps[0].acc * 100))
                             logging.info('done')
 
                         def acc(self, res):
@@ -323,24 +390,31 @@ def main(state):
                             return self.good_steps[test_idx].step
 
                 class TestRunner(object):  # noqa F811
+
                     def __init__(self, state):
                         self.state = state
                         if state.test_distill_epochs is None:
                             self.test_distill_epochs = state.distill_epochs
                         else:
                             self.test_distill_epochs = state.test_distill_epochs
-                        with state.pretend(distill_epochs=self.test_distill_epochs):
+                        with state.pretend(
+                                distill_epochs=self.test_distill_epochs):
                             self.stepss = StepCollection(state)
 
                     def run(self, test_idx, test_at_steps=None):
-                        with self.state.pretend(distill_epochs=self.test_distill_epochs):
+                        with self.state.pretend(
+                                distill_epochs=self.test_distill_epochs):
                             steps = self.stepss[test_idx]  # before seeding!
                             with self.seed(self.state.seed + 1 + test_idx):
                                 return evaluate_steps(
-                                    self.state, steps,
-                                    'Test #{}'.format(test_idx), '({}) images & ({}) lrs'.format(
-                                        self.state.test_distilled_images, ' '.join(state.test_distilled_lrs)
-                                    ), test_all=True, test_at_steps=test_at_steps)
+                                    self.state,
+                                    steps,
+                                    'Test #{}'.format(test_idx),
+                                    '({}) images & ({}) lrs'.format(
+                                        self.state.test_distilled_images,
+                                        ' '.join(state.test_distilled_lrs)),
+                                    test_all=True,
+                                    test_at_steps=test_at_steps)
 
                     @contextmanager
                     def seed(self, seed):
@@ -370,8 +444,7 @@ def main(state):
                         assert res[0][0].item() == 0
                     else:
                         cached = ress[0]
-                        res = (cached[0],
-                               torch.cat([cached[1][:1], res[1]], 0),
+                        res = (cached[0], torch.cat([cached[1][:1], res[1]], 0),
                                torch.cat([cached[2][:1], res[2]], 0))
                 ress.append(res)
             # See NOTE [ Evaluation Result Format ] for output format
@@ -379,15 +452,19 @@ def main(state):
                 results = ress[0]
             else:
                 results = (
-                    ress[0][0],                          # at_steps
+                    ress[0][0],  # at_steps
                     torch.cat([v[1] for v in ress], 1),  # accs
                     torch.cat([v[2] for v in ress], 1),  # losses
                 )
             logging.info('')
             # Use dummy learning rates to print summary
-            steps = [(None, None, np.array(utils.nan)) for _ in range(test_runner.num_steps())]
-            test_desc = '({}) images & ({}) lrs'.format(state.test_distilled_images, ' '.join(state.test_distilled_lrs))
-            logging.info(format_stepwise_results(state, steps, 'Summary with ' + test_desc, results))
+            steps = [(None, None, np.array(utils.nan))
+                     for _ in range(test_runner.num_steps())]
+            test_desc = '({}) images & ({}) lrs'.format(
+                state.test_distilled_images, ' '.join(state.test_distilled_lrs))
+            logging.info(
+                format_stepwise_results(state, steps,
+                                        'Summary with ' + test_desc, results))
             save_test_results(state, results)
             logging.info('')
         else:

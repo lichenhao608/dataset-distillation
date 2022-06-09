@@ -1,12 +1,12 @@
 import contextlib
 import os
 from collections import namedtuple
+from pickle import LIST
 
 from PIL import Image
 from torchvision import datasets, transforms
 
-from . import caltech_ucsd_birds
-from . import pascal_voc
+from . import caltech_ucsd_birds, coco, pascal_voc
 from .usps import USPS
 
 default_dataset_roots = dict(
@@ -17,8 +17,8 @@ default_dataset_roots = dict(
     Cifar10='./data/cifar10',
     CUB200='./data/birds',
     PASCAL_VOC='./data/pascal_voc',
+    COCO_BG='data/coco/train2017',
 )
-
 
 dataset_normalization = dict(
     MNIST=((0.1307,), (0.3081,)),
@@ -30,22 +30,24 @@ dataset_normalization = dict(
     CUB200=((0.47850531339645386, 0.4992702007293701, 0.4022205173969269),
             (0.23210887610912323, 0.2277066558599472, 0.26652416586875916)),
     PASCAL_VOC=((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),
+    COCO_BG=((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),
 )
-
 
 dataset_labels = dict(
     MNIST=list(range(10)),
     MNIST_RGB=list(range(10)),
     USPS=list(range(10)),
     SVHN=list(range(10)),
-    Cifar10=('plane', 'car', 'bird', 'cat',
-             'deer', 'dog', 'monkey', 'horse', 'ship', 'truck'),
+    Cifar10=('plane', 'car', 'bird', 'cat', 'deer', 'dog', 'monkey', 'horse',
+             'ship', 'truck'),
     CUB200=caltech_ucsd_birds.class_labels,
     PASCAL_VOC=pascal_voc.object_categories,
+    COCO_BG=list(range(93)),
 )
 
 # (nc, real_size, num_classes)
-DatasetStats = namedtuple('DatasetStats', ' '.join(['nc', 'real_size', 'num_classes']))
+DatasetStats = namedtuple('DatasetStats',
+                          ' '.join(['nc', 'real_size', 'num_classes']))
 
 dataset_stats = dict(
     MNIST=DatasetStats(1, 28, 10),
@@ -55,15 +57,17 @@ dataset_stats = dict(
     Cifar10=DatasetStats(3, 32, 10),
     CUB200=DatasetStats(3, 224, 200),
     PASCAL_VOC=DatasetStats(3, 224, 20),
+    COCO_BG=DatasetStats(3, 224, 93),
 )
 
-assert(set(default_dataset_roots.keys()) == set(dataset_normalization.keys()) ==
-       set(dataset_labels.keys()) == set(dataset_stats.keys()))
+assert (set(default_dataset_roots.keys()) == set(dataset_normalization.keys())
+        == set(dataset_labels.keys()) == set(dataset_stats.keys()))
 
 
 def get_info(state):
     name = state.dataset  # argparse dataset fmt ensures that this is lowercase and doesn't contrain hyphen
-    assert name in dataset_stats, 'Unsupported dataset: {}'.format(state.dataset)
+    assert name in dataset_stats, 'Unsupported dataset: {}'.format(
+        state.dataset)
     nc, input_size, num_classes = dataset_stats[name]
     normalization = dataset_normalization[name]
     root = state.dataset_root
@@ -86,7 +90,9 @@ def get_dataset(state, phase):
 
     if name == 'MNIST':
         if input_size != real_size:
-            transform_list = [transforms.Resize([input_size, input_size], Image.BICUBIC)]
+            transform_list = [
+                transforms.Resize([input_size, input_size], Image.BICUBIC)
+            ]
         else:
             transform_list = []
         transform_list += [
@@ -94,22 +100,29 @@ def get_dataset(state, phase):
             transforms.Normalize(*normalization),
         ]
         with suppress_stdout():
-            return datasets.MNIST(root, train=(phase == 'train'), download=True,
+            return datasets.MNIST(root,
+                                  train=(phase == 'train'),
+                                  download=True,
                                   transform=transforms.Compose(transform_list))
     elif name == 'MNIST_RGB':
         transform_list = [transforms.Grayscale(3)]
         if input_size != real_size:
-            transform_list.append(transforms.Resize([input_size, input_size], Image.BICUBIC))
+            transform_list.append(
+                transforms.Resize([input_size, input_size], Image.BICUBIC))
         transform_list += [
             transforms.ToTensor(),
             transforms.Normalize(*normalization),
         ]
         with suppress_stdout():
-            return datasets.MNIST(root, train=(phase == 'train'), download=True,
+            return datasets.MNIST(root,
+                                  train=(phase == 'train'),
+                                  download=True,
                                   transform=transforms.Compose(transform_list))
     elif name == 'USPS':
         if input_size != real_size:
-            transform_list = [transforms.Resize([input_size, input_size], Image.BICUBIC)]
+            transform_list = [
+                transforms.Resize([input_size, input_size], Image.BICUBIC)
+            ]
         else:
             transform_list = []
         transform_list += [
@@ -117,18 +130,23 @@ def get_dataset(state, phase):
             transforms.Normalize(*normalization),
         ]
         with suppress_stdout():
-            return USPS(root, train=(phase == 'train'), download=True,
+            return USPS(root,
+                        train=(phase == 'train'),
+                        download=True,
                         transform=transforms.Compose(transform_list))
     elif name == 'SVHN':
         transform_list = []
         if input_size != real_size:
-            transform_list.append(transforms.Resize([input_size, input_size], Image.BICUBIC))
+            transform_list.append(
+                transforms.Resize([input_size, input_size], Image.BICUBIC))
         transform_list += [
             transforms.ToTensor(),
             transforms.Normalize(*normalization),
         ]
         with suppress_stdout():
-            return datasets.SVHN(root, split=phase, download=True,
+            return datasets.SVHN(root,
+                                 split=phase,
+                                 download=True,
                                  transform=transforms.Compose(transform_list))
     elif name == 'Cifar10':
         transform_list = []
@@ -149,12 +167,16 @@ def get_dataset(state, phase):
             transforms.Normalize(*normalization),
         ]
         with suppress_stdout():
-            return datasets.CIFAR10(root, phase == 'train', transforms.Compose(transform_list), download=True)
+            return datasets.CIFAR10(root,
+                                    phase == 'train',
+                                    transforms.Compose(transform_list),
+                                    download=True)
     elif name == 'CUB200':
         transform_list = []
         if phase == 'train':
             transform_list += [
-                transforms.RandomResizedCrop(input_size, interpolation=Image.BICUBIC),
+                transforms.RandomResizedCrop(input_size,
+                                             interpolation=Image.BICUBIC),
                 transforms.RandomHorizontalFlip(),
             ]
         else:
@@ -165,12 +187,16 @@ def get_dataset(state, phase):
             transforms.ToTensor(),
             transforms.Normalize(*normalization),
         ]
-        return caltech_ucsd_birds.CUB200(root, phase == 'train', transforms.Compose(transform_list), download=True)
+        return caltech_ucsd_birds.CUB200(root,
+                                         phase == 'train',
+                                         transforms.Compose(transform_list),
+                                         download=True)
     elif name == 'PASCAL_VOC':
         transform_list = []
         if phase == 'train':
             transform_list += [
-                transforms.RandomResizedCrop(input_size, interpolation=Image.BICUBIC),
+                transforms.RandomResizedCrop(input_size,
+                                             interpolation=Image.BICUBIC),
                 transforms.RandomHorizontalFlip(),
             ]
         else:
@@ -183,7 +209,31 @@ def get_dataset(state, phase):
         ]
         if phase == 'train':
             phase = 'trainval'
-        return pascal_voc.PASCALVoc2007(root, phase, transforms.Compose(transform_list))
+        return pascal_voc.PASCALVoc2007(root, phase,
+                                        transforms.Compose(transform_list))
+    elif name == 'COCO_BG':
+        transform_list = []
+        if phase == 'train':
+            transform_list += [
+                transforms.RandomResizedCrop(input_size,
+                                             interpolation=Image.BICUBIC),
+                transforms.RandomHorizontalFlip(),
+            ]
+        else:
+            transform_list += [
+                transforms.Resize([input_size, input_size], Image.BICUBIC),
+            ]
+        transform_list += [
+            transforms.ToTensor(),
+            transforms.Normalize(*normalization),
+        ]
+        if phase == 'train':
+            return coco.CustomCOCO(
+                root, 'data/coco/annotations/instances_train2017.json',
+                transforms.Compose(transform_list))
+        return coco.CustomCOCO('data/coco/val2017',
+                               'data/coco/annotations/instances_val2017.json',
+                               transforms.Compose(transform_list))
 
     else:
         raise ValueError('Unsupported dataset: %s' % state.dataset)
